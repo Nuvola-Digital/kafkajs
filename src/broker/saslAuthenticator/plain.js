@@ -16,7 +16,8 @@ const plainAuthenticatorProvider = sasl => ({ host, port, logger, saslAuthentica
         logger.debug('SASL PLAIN authentication successful', { broker })
       } catch (e) {
         const error = new KafkaJSSASLAuthenticationError(
-          `SASL PLAIN authentication failed: ${e.message}`
+          `SASL PLAIN authentication failed: ${e.message}`,
+          { cause: e }
         )
         logger.error(error.message, { broker })
         throw error
