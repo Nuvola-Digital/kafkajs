@@ -1,5 +1,10 @@
 const Decoder = require('../../protocol/decoder')
 const { newLogger } = require('testHelpers')
+const {
+  KafkaJSConnectionClosedError,
+  KafkaJSNonRetriableError,
+  KafkaJSSASLAuthenticationError,
+} = require('../../errors')
 const scram256AuthenticatorProvider = require('./scram256')
 const { SCRAM, DIGESTS } = require('./scram')
 
@@ -29,6 +34,38 @@ describe('Broker > SASL Authenticator > SCRAM', () => {
       saslAuthenticate,
     })
     await expect(scram.authenticate()).rejects.toThrow('Invalid username or password')
+  })
+
+  describe('when the handshake fails', () => {
+    // Mirrors consumer/index.js onCrash, which restarts only when the deepest
+    // cause is retriable. The retrier wraps with { cause: e.cause || e }.
+    const originalCause = error => (error.cause ? originalCause(error.cause) : error)
+
+    const authenticateWith = async rejection => {
+      saslAuthenticate.mockRejectedValue(rejection)
+      logger.error = jest.fn()
+      const scram = new SCRAM(sasl, host, port, logger, saslAuthenticate, DIGESTS.SHA512)
+      return scram.authenticate().catch(e => e)
+    }
+
+    it('keeps a dropped connection retriable so the consumer restarts', async () => {
+      const closed = new KafkaJSConnectionClosedError('Closed connection', { host, port })
+      const error = await authenticateWith(closed)
+
+      expect(error).toBeInstanceOf(KafkaJSSASLAuthenticationError)
+      expect(error.message).toEqual('SASL SCRAM SHA512 authentication failed: Closed connection')
+      expect(error.cause).toBe(closed)
+
+      const wrapped = new KafkaJSNonRetriableError(error, { cause: error.cause || error })
+      expect(originalCause(wrapped).retriable).toBe(true)
+    })
+
+    it('keeps a rejected handshake non-retriable', async () => {
+      const error = await authenticateWith(new Error('Authentication failed'))
+
+      const wrapped = new KafkaJSNonRetriableError(error, { cause: error.cause || error })
+      expect(originalCause(wrapped).retriable).not.toBe(true)
+    })
   })
 
   describe('SCRAM 256', () => {

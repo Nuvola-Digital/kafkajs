@@ -38,7 +38,8 @@ const oauthBearerAuthenticatorProvider = sasl => ({ host, port, logger, saslAuth
         logger.debug('SASL OAUTHBEARER authentication successful', { broker })
       } catch (e) {
         const error = new KafkaJSSASLAuthenticationError(
-          `SASL OAUTHBEARER authentication failed: ${e.message}`
+          `SASL OAUTHBEARER authentication failed: ${e.message}`,
+          { cause: e }
         )
         logger.error(error.message, { broker })
         throw error

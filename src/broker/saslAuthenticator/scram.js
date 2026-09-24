@@ -155,7 +155,9 @@ class SCRAM {
 
       this.logger.debug(`${PREFIX} successful`, { broker })
     } catch (e) {
-      const error = new KafkaJSSASLAuthenticationError(`${PREFIX} failed: ${e.message}`)
+      const error = new KafkaJSSASLAuthenticationError(`${PREFIX} failed: ${e.message}`, {
+        cause: e,
+      })
       this.logger.error(error.message, { broker })
       throw error
     }
